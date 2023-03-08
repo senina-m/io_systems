@@ -46,4 +46,38 @@
 
 ## Примеры использования
 
+```
+natalia@natalia-VirtualBox:~/io_labs/io_systems/lab1$ sudo insmod ch_drv.ko
+natalia@natalia-VirtualBox:~/io_labs/io_systems/lab1$ echo "2+3" > /dev/var2
+natalia@natalia-VirtualBox:~/io_labs/io_systems/lab1$ echo "3-6" > /dev/var2
+natalia@natalia-VirtualBox:~/io_labs/io_systems/lab1$ cat /proc/var2
+5-3
+```
+
+```
+natalia@natalia-VirtualBox:~/io_labs/io_systems/lab1$ cat /dev/var2
+natalia@natalia-VirtualBox:~/io_labs/io_systems/lab1$ dmesg
 ...
+[19377.923091] Hello!
+[19377.926375] /proc/var2 created
+[19394.396821] Driver: open()
+[19394.396841] Driver: write()
+[19394.396842] Writen buffer 2+3
+               \xb4\xb4\xff\xff\x1f\xb1\x14\x97\xff\xff\xff\xff
+[19394.396847] Driver: close()
+[19408.749360] Driver: open()
+[19408.749373] Driver: write()
+[19408.749374] Writen buffer 3-6
+               \xb4\xb4\xff\xff\x1f\xb1\x14\x97\xff\xff\xff\xff
+[19408.749445] Driver: close()
+[19415.171743] Procfile read
+[19415.171793] Procfile read
+[19457.785777] Driver: open()
+[19457.785786] Driver: read()
+[19457.785786] '5' 
+[19457.785787] '\x00' 
+[19457.785788] '-' 
+[19457.785788] '3' 
+[19457.785788] '\x00' 
+[19457.785793] Driver: close()
+```

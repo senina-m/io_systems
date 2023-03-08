@@ -172,11 +172,11 @@ int read_equatuion(char* buffer, int* result){
   enum operation op;
 
   if(read_int(buffer, &offset, &int1)) return 1; //exeption
-  printk(KERN_INFO "Readed int1: %d\n", int1);
+
   if(read_operation(buffer, &offset, &op)) return 1; //exeption
-  printk(KERN_INFO "Operation: %i\n", op);
+
   if(read_int(buffer, &offset, &int2)) return 1; //exeption
-  printk(KERN_INFO "Readed int2: %d\n", int2);
+
 
 
   switch (op){
@@ -214,7 +214,11 @@ static ssize_t my_read(struct file *f, char __user *buf, size_t len, loff_t *off
   return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);*/
   res_buffer[res_end] = '\0';
   pr_info("Driver: read()");
-  pr_info("Results: %s", res_buffer);
+  int i;
+  for (i=0; i < res_end; i++){
+    printk(KERN_INFO "\'%c\' ", res_buffer[i]);
+  }
+  // pr_info("Results: %s", res_buffer);
   return 0;
 }
 
@@ -231,12 +235,10 @@ static ssize_t my_write(struct file *file, const char __user *user_buffer, size_
   itoa(res, str_res);
   str_res_len = strlen(str_res);
 
-  printk(KERN_INFO "res=%s res_len=%i\n", str_res, str_res_len);
-
   copy_str(res_buffer, str_res, res_end, str_res_len);
 
-  res_end += str_res_len;
-  res_buffer[res_end - 1] = ' ';
+  res_end += str_res_len + 1;
+  res_buffer[res_end] = ' ';
   if(res_end > BUFFER_SIZE){
     printk(KERN_INFO "Buffer out of bounds!");
     res_end = 0;
@@ -275,7 +277,7 @@ static int __init ch_drv_init(void)
 
   cl->dev_uevent = my_dev_uevent;
 
-    if (device_create(cl, NULL, first, NULL, "mychdev") == NULL) {
+    if (device_create(cl, NULL, first, NULL, "var2") == NULL) {
 		  class_destroy(cl);
 		  unregister_chrdev_region(first, 1);
 		  return -1;
