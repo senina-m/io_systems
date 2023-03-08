@@ -17,12 +17,15 @@
 
 static struct proc_dir_entry* our_proc_file;
 
+static char res_buffer[4096];
+static int res_end = 0;
+
 static ssize_t procfile_read(struct file *filePointer, char __user *buffer, 
                              size_t buffer_length, loff_t *offset) 
 { 
     pr_info("Procfile read\n");
     res_buffer[res_end] = '\0';
-    return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);
+    return simple_read_from_buffer(buffer, buffer_length, offset, res_buffer, res_end + 1);
 }
 
 #ifdef HAVE_PROC_OPS 
@@ -38,9 +41,6 @@ static const struct file_operations proc_file_fops = {
 static dev_t first;
 static struct cdev c_dev; 
 static struct class *cl;
-
-static char res_buffer[4096];
-static int res_end = 0;
 
 enum operation{
   plus=0, 
@@ -190,9 +190,13 @@ static int my_close(struct inode *i, struct file *f){
 }
 
 static ssize_t my_read(struct file *f, char __user *buf, size_t len, loff_t *off){
-  printk(KERN_INFO "Driver: read()\n");
+  /*printk(KERN_INFO "Driver: read()\n");
   res_buffer[res_end] = '\0';
-  return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);
+  return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);*/
+  res_buffer[res_end] = '\0';
+  pr_info("Driver: read()");
+  pr_info("Results: %s", res_buffer);
+  return 0;
 }
 
 static ssize_t my_write(struct file *file, const char __user *user_buffer, size_t len, loff_t * offset){
