@@ -17,7 +17,8 @@
 
 static struct proc_dir_entry* our_proc_file;
 
-static char res_buffer[4096];
+#define BUFFER_SIZE 4906
+static char res_buffer[BUFFER_SIZE];
 static int res_end = 0;
 
 static ssize_t procfile_read(struct file *filePointer, char __user *buffer, 
@@ -75,7 +76,7 @@ void reverse(char str[], int length){
 void itoa(int num, char* str){
   int i = 0;
   int base = 10;
-  bool isNegative = false;
+  int isNegative = 0;
   
   if (num == 0){
     str[i++] = '0';
@@ -84,7 +85,7 @@ void itoa(int num, char* str){
   }
 
   if (num < 0){
-    isNegative = true;
+    isNegative = 1;
     num = -num;
   }
   
@@ -103,27 +104,37 @@ void itoa(int num, char* str){
 }
 
 int read_int(char* buffer, size_t* offset, int* res){
-  int d;
-  int i = 0;
-  int r_int = 0;
-  int k = 0;
-  char cur = buffer[*offset];
-  int is_negative;
-  if(buffer[*offset] == '-') {
-    is_negative = 1;
-    *offset++;
-  }
+    int d;
+    int i = 1;
+    int r_int = 0;
+    int k = 0;
+    // printk(KERN_INFO "Parse buffer: %s, offset=%ld\n", buffer, *offset);
+    char cur = buffer[*offset];
+    int is_negative = 0;
+    
 
-  if(cur >= '1' && cur <= '9') return 1; //if num starts with 0 and has to be digit
-  
-  while(cur >= '0' && cur <= '9' && k < 10){ //k < 10 to get integer not longer
-    d = cur - '0';
-    r_int += d*i;
-    *offset++;
-    i *= 10;
-    k++;
+    if(buffer[*offset] == '-') {
+        is_negative = 1;
+        (*offset)++;
+        cur = buffer[*offset];
+        // printk(KERN_INFO "HEEEEY ITs NEGATIVE\n");
+    }
 
-    cur = buffer[*offset];
+    // printk(KERN_INFO "Read int: neg=%i, fst chr=%c, i_c=%i offset=%ld, res=%i\n", is_negative, cur, cur, *offset, r_int);
+    if (!(cur >= '1' && cur <= '9')) return 1; //if num starts with 0 and has to be digit
+
+    // printk(KERN_INFO "Read int: %i, %i, %i\n", cur <= '0', cur >= '9', k);
+
+    while(cur >= '0' && cur <= '9' && k < 10){ //k < 10 to get integer not longer
+        d = cur - '0';
+        r_int += d*i;
+        // printk(KERN_INFO "Read int: neg=%i, fst chr=%c, i_c=%i offset=%ld, res=%i\n", is_negative, cur, cur, *offset, r_int);
+
+        (*offset)++;
+        i *= 10;
+        k++;
+
+        cur = buffer[*offset];
   }
 
   if (is_negative) r_int *= -1;
@@ -133,6 +144,8 @@ int read_int(char* buffer, size_t* offset, int* res){
 
 int read_operation(char* buffer, size_t *offset, enum operation* op){
   char ch = buffer[*offset];
+//   printk(KERN_INFO "Read op: buff=%s, ch=%c, off=%ld\n", buffer, ch, *offset);
+  (*offset)++;
   switch (ch){
   case '+':
     *op = plus;
@@ -147,19 +160,24 @@ int read_operation(char* buffer, size_t *offset, enum operation* op){
     *op = del;
     return 0;
   default:
+    printk(KERN_INFO "WRONG OPERATION!");
     return 1;
   }
 }
 
 int read_equatuion(char* buffer, int* result){
-  size_t offset;
+  size_t offset = 0;
   int int1;
   int int2;
   enum operation op;
 
   if(read_int(buffer, &offset, &int1)) return 1; //exeption
+  printk(KERN_INFO "Readed int1: %d\n", int1);
   if(read_operation(buffer, &offset, &op)) return 1; //exeption
+  printk(KERN_INFO "Operation: %i\n", op);
   if(read_int(buffer, &offset, &int2)) return 1; //exeption
+  printk(KERN_INFO "Readed int2: %d\n", int2);
+
 
   switch (op){
   case plus:
@@ -178,6 +196,7 @@ int read_equatuion(char* buffer, int* result){
     return 1;
   }
 }
+
 
 static int my_open(struct inode *i, struct file *f){
   printk(KERN_INFO "Driver: open()\n");
@@ -203,15 +222,26 @@ static ssize_t my_write(struct file *file, const char __user *user_buffer, size_
   char str[len];
   int res;
   char str_res[10];
+  int str_res_len;
   printk(KERN_INFO "Driver: write()\n");
   if (copy_from_user(str, user_buffer, len) != 0) return -EFAULT;
   printk(KERN_INFO "Writen buffer %s", str);
 
-  if(read_equatuion(str, &res)) printk(KERN_INFO "Read \'%s\', didn't manage to count result!\n");
+  if(read_equatuion(str, &res)) printk(KERN_INFO "Read \'%s\', didn't manage to count result!\n", str);
   itoa(res, str_res);
-  int str_res_len = strlen(str_res) - 1;
+  str_res_len = strlen(str_res);
+
+  printk(KERN_INFO "res=%s res_len=%i\n", str_res, str_res_len);
+
   copy_str(res_buffer, str_res, res_end, str_res_len);
+
   res_end += str_res_len;
+  res_buffer[res_end - 1] = ' ';
+  if(res_end > BUFFER_SIZE){
+    printk(KERN_INFO "Buffer out of bounds!");
+    res_end = 0;
+  }
+
   return len;
 }
 
