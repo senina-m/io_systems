@@ -214,21 +214,23 @@ static ssize_t my_read(struct file *f, char __user *buf, size_t len, loff_t *off
   return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);*/
   res_buffer[res_end] = '\0';
   pr_info("Driver: read()");
-  int i;
-  for (i=0; i < res_end; i++){
-    printk(KERN_INFO "\'%c\' ", res_buffer[i]);
-  }
-  // pr_info("Results: %s", res_buffer);
+  // int i;
+  // for (i=0; i < res_end; i++){
+  //   printk(KERN_INFO "\'%c\' ", res_buffer[i]);
+  // }
+  pr_info("Results: %s", res_buffer);
+  res_buffer[res_end] = ' ';
   return 0;
 }
 
 static ssize_t my_write(struct file *file, const char __user *user_buffer, size_t len, loff_t * offset){
-  char str[len];
+  char str[len + 1];
   int res;
   char str_res[10];
   int str_res_len;
   printk(KERN_INFO "Driver: write()\n");
   if (copy_from_user(str, user_buffer, len) != 0) return -EFAULT;
+  str[len] = '\0';
   printk(KERN_INFO "Writen buffer %s", str);
 
   if(read_equatuion(str, &res)) printk(KERN_INFO "Read \'%s\', didn't manage to count result!\n", str);
