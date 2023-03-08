@@ -4,9 +4,36 @@
 #include <linux/types.h>
 #include <linux/kdev_t.h>
 #include <linux/fs.h>
+#include <linux/proc_fs.h> 
 #include <linux/device.h>
 #include <linux/cdev.h>
 #include <linux/slab.h>
+
+#define PROCFS_NAME "var2"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0) 
+  #define HAVE_PROC_OPS 
+#endif 
+
+static struct proc_dir_entry* our_proc_file;
+
+static ssize_t procfile_read(struct file *filePointer, char __user *buffer, 
+                             size_t buffer_length, loff_t *offset) 
+{ 
+    pr_info("Procfile read\n");
+    res_buffer[res_end] = '\0';
+    return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);
+}
+
+#ifdef HAVE_PROC_OPS 
+static const struct proc_ops proc_file_fops = { 
+    .proc_read = procfile_read, 
+}; 
+#else 
+static const struct file_operations proc_file_fops = { 
+    .read = procfile_read, 
+}; 
+#endif 
 
 static dev_t first;
 static struct cdev c_dev; 
@@ -199,38 +226,58 @@ static struct file_operations mychdev_fops =
   .write      = my_write
 };
 
-static int __init ch_drv_init(void){
-  printk(KERN_INFO "Hello!\n");
-  if (alloc_chrdev_region(&first, 0, 1, "ch_dev") < 0) return -1;
-  if ((cl = class_create(THIS_MODULE, "chardrv")) == NULL){
-    unregister_chrdev_region(first, 1);
-    return -1;
-  }
+static int __init ch_drv_init(void)
+{
+    printk(KERN_INFO "Hello!\n");
+
+    //chrdev init
+    if (alloc_chrdev_region(&first, 0, 1, "ch_dev") < 0) {
+		  return -1;
+	  }
+    if ((cl = class_create(THIS_MODULE, "chardrv")) == NULL) {
+		  unregister_chrdev_region(first, 1);
+		  return -1;
+	  }
 
   cl->dev_uevent = my_dev_uevent;
 
-  if (device_create(cl, NULL, first, NULL, "mychdev") == NULL){
-    class_destroy(cl);
-    unregister_chrdev_region(first, 1);
-    return -1;
-  }
-  cdev_init(&c_dev, &mychdev_fops);
-  if (cdev_add(&c_dev, first, 1) == -1){
-    device_destroy(cl, first);
-    class_destroy(cl);
-    unregister_chrdev_region(first, 1);
-    return -1;
-  }
-  return 0;
+    if (device_create(cl, NULL, first, NULL, "mychdev") == NULL) {
+		  class_destroy(cl);
+		  unregister_chrdev_region(first, 1);
+		  return -1;
+	  }
+    cdev_init(&c_dev, &mychdev_fops);
+    if (cdev_add(&c_dev, first, 1) == -1) {
+		  device_destroy(cl, first);
+		  class_destroy(cl);
+		  unregister_chrdev_region(first, 1);
+		  return -1;
+	  }
+
+    // procfs init
+    our_proc_file = proc_create(PROCFS_NAME, 0644, NULL, &proc_file_fops); 
+    if (NULL == our_proc_file) { 
+        proc_remove(our_proc_file); 
+        pr_alert("Error:Could not initialize /proc/%s\n", PROCFS_NAME); 
+        return -ENOMEM; 
+    } 
+ 
+    pr_info("/proc/%s created\n", PROCFS_NAME); 
+
+    return 0;
 }
  
 static void __exit ch_drv_exit(void)
 {
-  cdev_del(&c_dev);
-  device_destroy(cl, first);
-  class_destroy(cl);
-  unregister_chrdev_region(first, 1);
-  printk(KERN_INFO "Bye!!!\n");
+    // chrdev deatroy
+    cdev_del(&c_dev);
+    device_destroy(cl, first);
+    class_destroy(cl);
+    unregister_chrdev_region(first, 1);
+
+    //procfs destory
+    proc_remove(our_proc_file); 
+    pr_info("Bye!!!\n");
 }
  
 module_init(ch_drv_init);
