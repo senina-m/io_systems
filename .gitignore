@@ -1,0 +1,14 @@
+lab1/.ch_drv.ko.cmd
+lab1/.ch_drv.mod.cmd
+lab1/.ch_drv.mod.o.cmd
+lab1/.ch_drv.o.cmd
+lab1/.Module.symvers.cmd
+lab1/.modules.order.cmd
+lab1/ch_drv.mod
+lab1/ch_drv.mod.c
+lab1/ch_drv.mod.o
+lab1/ch_drv.o
+lab1/Module.symvers
+lab1/modules.order
+lab1/ch_drv.ko
+.vscode
