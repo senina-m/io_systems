@@ -12,26 +12,15 @@ static dev_t first;
 static struct cdev c_dev; 
 static struct class *cl;
 
-static enum operation{
+static char res_buffer[4096];
+static int res_end = 0;
+
+enum operation{
   plus=0, 
   minus=1, 
   mul=2,
   del=3
 };
-
-struct result;
-
-struct result{
-  int value;
-  struct result* next;
-};
-
-struct my_device_data {
-  struct cdev cdev;
-  struct result* res;
-};
-
-static struct my_device_data* my_data;
 
 void copy_str(char* buffer, char* str, size_t offset, int size){
   size_t i;
@@ -56,42 +45,33 @@ void reverse(char str[], int length){
   }
 }
 
-//stollen atoi implementation
-void itoa(int num, char* str, int base){
+void itoa(int num, char* str){
   int i = 0;
+  int base = 10;
   bool isNegative = false;
   
-  // Handle 0 explicitly, otherwise empty string is printed for 0
-  if (num == 0)
-  {
+  if (num == 0){
     str[i++] = '0';
     str[i] = '\0';
     return;
   }
 
-  // In standard itoa(), negative numbers are handled only with
-  // base 10. Otherwise numbers are considered unsigned.
-  if (num < 0 && base == 10)
-  {
+  if (num < 0){
     isNegative = true;
     num = -num;
   }
   
-  // Process individual digits
-  while (num != 0)
-  {
+  while (num != 0){
     int rem = num % base;
     str[i++] = (rem > 9)? (rem-10) + 'a' : rem + '0';
     num = num/base;
   }
 
-  // If number is negative, append '-'
   if (isNegative)
     str[i++] = '-';
 
-  str[i] = '\0';// Append string terminator
+  str[i] = '\0';
 
-  // Reverse the string
   reverse(str, i);
 }
 
@@ -149,9 +129,11 @@ int read_equatuion(char* buffer, int* result){
   int int1;
   int int2;
   enum operation op;
+
   if(read_int(buffer, &offset, &int1)) return 1; //exeption
   if(read_operation(buffer, &offset, &op)) return 1; //exeption
   if(read_int(buffer, &offset, &int2)) return 1; //exeption
+
   switch (op){
   case plus:
     *result = int1 + int2;
@@ -170,66 +152,8 @@ int read_equatuion(char* buffer, int* result){
   }
 }
 
-void add_result(int v){
-  struct result* new_result = (struct result*) kmalloc(sizeof(struct result), GFP_KERNEL);
-  new_result->value = v;
-  new_result->next = my_data->res;
-  my_data->res = new_result;
-}
-
-void free_results(void){
-  struct result* cur = my_data->res;
-  struct result* next;
-  while(cur->next != NULL){
-    next = cur->next;
-    kfree(cur);
-  }
-  kfree(cur);
-}
-
-void create_results(int v){
-  struct result* new_result = (struct result*)kmalloc(sizeof(struct result), GFP_KERNEL);
-  new_result->next = NULL;
-  new_result->value = v;
-  my_data->res = new_result;
-}
-
-size_t count_result_size(struct result* res){
-  struct result* cur = my_data->res;
-  size_t len = 0;
-  char buf[256];
-  if (!cur) return len;
-  do {
-    cur = cur->next;
-    itoa(cur->value, buf, 10);
-    len += strlen(buf) - 1; //sub 1 because the line is \0 terminated
-  } while(cur->next != NULL);
-
-  return len + 1; // add 1 beacuse we will need \0 in the end
-}
-
-//takes only len > 0 strs
-char* results_to_str(struct result* res, size_t len){
-  int cur_len; 
-  char buf[256];
-  struct result* cur = my_data->res;
-  char* buffer = (char*)kmalloc(sizeof(char)*len, GFP_KERNEL);
-  size_t offset = 0;
-  buffer[len-1] = '\0';
-  do {
-    cur = cur->next;
-    itoa(cur->value, buf, 10);
-    cur_len = strlen(buf) - 1;
-    copy_str(buffer, buf, offset, cur_len);
-    offset += cur_len;
-  } while(cur->next != NULL);
-  return buffer;
-}
-
 static int my_open(struct inode *i, struct file *f){
   printk(KERN_INFO "Driver: open()\n");
-  my_data = container_of(i->i_cdev, struct my_device_data, cdev);
-  f->private_data = my_data;
   return 0;
 }
 
@@ -238,39 +162,32 @@ static int my_close(struct inode *i, struct file *f){
   return 0;
 }
 
-static ssize_t my_read(struct file *file, char __user *user_buffer, size_t size, loff_t *offset){
-  struct my_device_data *my_data = (struct my_device_data *) file->private_data;
+static ssize_t my_read(struct file *f, char __user *buf, size_t len, loff_t *off){
   printk(KERN_INFO "Driver: read()\n");
-  ssize_t len = min(count_result_size(my_data->res) - *offset, size);
-
-  if (len <= 0) return 0;
-
-  /* read data from my_data->buffer to user buffer */
-  if (copy_to_user(user_buffer, my_data->buffer + *offset, len)) return -EFAULT;
-
-  *offset += len;
-  return len;
+  res_buffer[res_end] = '\0';
+  return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);
 }
 
 static ssize_t my_write(struct file *file, const char __user *user_buffer, size_t len, loff_t * offset){
-  printk(KERN_INFO "Driver: write()\n");
-  char srt[len];
-  if (copy_from_user(srt, buf, len) != 0) {
-    return -EFAULT;
-  }
-
+  char str[len];
   int res;
-  if(read_equatuion(str, &res)) //exception
-  if(!my_data->res) create_results(res);
-  else add_result(res);
-  
+  char str_res[10];
+  printk(KERN_INFO "Driver: write()\n");
+  if (copy_from_user(str, user_buffer, len) != 0) return -EFAULT;
+  printk(KERN_INFO "Writen buffer %s", str);
+
+  if(read_equatuion(str, &res)) printk(KERN_INFO "Read \'%s\', didn't manage to count result!\n");
+  itoa(res, str_res);
+  int str_res_len = strlen(str_res) - 1;
+  copy_str(res_buffer, str_res, res_end, str_res_len);
+  res_end += str_res_len;
   return len;
 }
 
 static int my_dev_uevent(struct device *dev, struct kobj_uevent_env *env)
 {
-    add_uevent_var(env, "DEVMODE=%#o", 0666);
-    return 0;
+  add_uevent_var(env, "DEVMODE=%#o", 0777);
+  return 0;
 }
 
 static struct file_operations mychdev_fops =
@@ -282,45 +199,38 @@ static struct file_operations mychdev_fops =
   .write      = my_write
 };
 
-static int __init ch_drv_init(void)
-{
-    printk(KERN_INFO "Hello!\n");
-    if (alloc_chrdev_region(&first, 0, 1, "ch_dev") < 0)
-	  {
-		return -1;
-	  }
-    if ((cl = class_create(THIS_MODULE, "chardrv")) == NULL)
-	  {
-		unregister_chrdev_region(first, 1);
-		return -1;
-	  }
+static int __init ch_drv_init(void){
+  printk(KERN_INFO "Hello!\n");
+  if (alloc_chrdev_region(&first, 0, 1, "ch_dev") < 0) return -1;
+  if ((cl = class_create(THIS_MODULE, "chardrv")) == NULL){
+    unregister_chrdev_region(first, 1);
+    return -1;
+  }
 
-    cl->dev_uevent = my_dev_uevent;
+  cl->dev_uevent = my_dev_uevent;
 
-    if (device_create(cl, NULL, first, NULL, "mychdev") == NULL)
-	  {
-		class_destroy(cl);
-		unregister_chrdev_region(first, 1);
-		return -1;
-	  }
-    cdev_init(&c_dev, &mychdev_fops);
-    if (cdev_add(&c_dev, first, 1) == -1)
-	  {
-		device_destroy(cl, first);
-		class_destroy(cl);
-		unregister_chrdev_region(first, 1);
-		return -1;
-	  }
-    return 0;
+  if (device_create(cl, NULL, first, NULL, "mychdev") == NULL){
+    class_destroy(cl);
+    unregister_chrdev_region(first, 1);
+    return -1;
+  }
+  cdev_init(&c_dev, &mychdev_fops);
+  if (cdev_add(&c_dev, first, 1) == -1){
+    device_destroy(cl, first);
+    class_destroy(cl);
+    unregister_chrdev_region(first, 1);
+    return -1;
+  }
+  return 0;
 }
  
 static void __exit ch_drv_exit(void)
 {
-    cdev_del(&c_dev);
-    device_destroy(cl, first);
-    class_destroy(cl);
-    unregister_chrdev_region(first, 1);
-    printk(KERN_INFO "Bye!!!\n");
+  cdev_del(&c_dev);
+  device_destroy(cl, first);
+  class_destroy(cl);
+  unregister_chrdev_region(first, 1);
+  printk(KERN_INFO "Bye!!!\n");
 }
  
 module_init(ch_drv_init);
