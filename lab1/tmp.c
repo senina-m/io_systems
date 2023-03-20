@@ -27,9 +27,9 @@ size_t strlen(const char* str) {
 
 void swap(char *xp, char *yp)
 {
-    char temp = *xp;
-    *xp = *yp;
-    *yp = temp;
+  char temp = *xp;
+  *xp = *yp;
+  *yp = temp;
 }
 
 void reverse(char str[], int length){
@@ -92,15 +92,13 @@ int read_int(char* buffer, size_t* offset, int* res){
     // printf("Read int: neg=%i, fst chr=%c, i_c=%i offset=%ld, res=%i\n", is_negative, cur, cur, *offset, r_int);
     if (!(cur >= '1' && cur <= '9')) return 1; //if num starts with 0 and has to be digit
 
-    // printf("Read int: %i, %i, %i\n", cur <= '0', cur >= '9', k);
-
     while(cur >= '0' && cur <= '9' && k < 10){ //k < 10 to get integer not longer
         d = cur - '0';
-        r_int += d*i;
-        // printf("Read int: neg=%i, fst chr=%c, i_c=%i offset=%ld, res=%i\n", is_negative, cur, cur, *offset, r_int);
+        r_int = r_int * 10;
+        r_int += d;
 
+        // printf("Read int: neg=%i, fst chr=%i, i=%i offset=%ld, res=%i\n", is_negative, d, i, *offset, r_int);
         (*offset)++;
-        i *= 10;
         k++;
 
         cur = buffer[*offset];
@@ -169,8 +167,16 @@ int read_equatuion(char* buffer, int* result){
 
 static void my_read(){
   printf("Driver: read()\n");
+  int tmp = res_buffer[res_end];
   res_buffer[res_end] = '\0';
-  printf("RESULT: %s", res_buffer);
+  printf("RESULT: %s\n", res_buffer);
+  int i = 0;
+  printf("res_end=%i:::::::\n", res_end); 
+  for(i; i < res_end; i++){
+    printf("\'%c\'", res_buffer[i]);
+  }
+  printf("\n");
+  res_buffer[res_end] = tmp;
 }
 
 static int my_write(char* str, int len){
@@ -189,7 +195,8 @@ static int my_write(char* str, int len){
   copy_str(res_buffer, str_res, res_end, str_res_len);
 
   res_end += str_res_len;
-  res_buffer[res_end - 1] = ' ';
+  res_buffer[res_end] = ';';
+  
   if(res_end > BUFFER_SIZE){
     printf("Buffer out of bounds!");
     res_end = 0;
@@ -199,8 +206,8 @@ static int my_write(char* str, int len){
 }
 
 int main(int argc, char const *argv[]){
-    char str[4] = "-3+2";
-    my_write(str, 4);
-    my_read();
-    return 0;
+  char str[7] = "-35+462";
+  my_write(str, 7);
+  my_read();
+  return 0;
 }
