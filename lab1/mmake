@@ -1,0 +1,12 @@
+#/bin/bash
+
+rmmod ch_drv.ko
+make
+insmod ch_drv.ko
+
+echo "12+34" >> /dev/var2
+echo "-12+34" >> /dev/var2
+echo "-2+134" >> /dev/var2
+cat /dev/var2
+
+# dmesg

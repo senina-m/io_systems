@@ -78,7 +78,6 @@ void itoa(int num, char* str){
 
 int read_int(char* buffer, size_t* offset, int* res){
     int d;
-    int i = 1;
     int r_int = 0;
     int k = 0;
     // printk(KERN_INFO "Parse buffer: %s, offset=%ld\n", buffer, *offset);
@@ -100,11 +99,11 @@ int read_int(char* buffer, size_t* offset, int* res){
 
     while(cur >= '0' && cur <= '9' && k < 10){ //k < 10 to get integer not longer
         d = cur - '0';
-        r_int += d*i;
+        r_int = r_int * 10;
+        r_int += d;
         // printk(KERN_INFO "Read int: neg=%i, fst chr=%c, i_c=%i offset=%ld, res=%i\n", is_negative, cur, cur, *offset, r_int);
 
         (*offset)++;
-        i *= 10;
         k++;
 
         cur = buffer[*offset];
@@ -182,9 +181,17 @@ static int my_close(struct inode *i, struct file *f){
 }
 
 static ssize_t my_read(struct file *f, char __user *buf, size_t len, loff_t *off){
+  int r;
+  int i = 0;
   printk(KERN_INFO "Driver: read()\n");
+  printk("buffer:\n"); 
+  for(i; i < res_end; i++){
+    printk("\'%c\'", res_buffer[i]);
+  }
   res_buffer[res_end] = '\0';
-  return simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);
+  r = simple_read_from_buffer(buf, len, off, res_buffer, res_end + 1);
+  res_buffer[res_end] = ';';
+  return r;
 }
 
 static ssize_t my_write(struct file *file, const char __user *user_buffer, size_t len, loff_t * offset){
@@ -194,6 +201,7 @@ static ssize_t my_write(struct file *file, const char __user *user_buffer, size_
   int str_res_len;
   printk(KERN_INFO "Driver: write()\n");
   if (copy_from_user(str, user_buffer, len) != 0) return -EFAULT;
+  str[len] = '\0';
   printk(KERN_INFO "Writen buffer %s", str);
 
   if(read_equatuion(str, &res)) printk(KERN_INFO "Read \'%s\', didn't manage to count result!\n", str);
@@ -204,13 +212,21 @@ static ssize_t my_write(struct file *file, const char __user *user_buffer, size_
 
   copy_str(res_buffer, str_res, res_end, str_res_len);
 
-  res_end += str_res_len;
-  res_buffer[res_end - 1] = ' ';
+  res_end += str_res_len + 1;
+  res_buffer[res_end - 1] = ';';
+  printk("res_buffer[res_end]=%c\n", res_buffer[res_end]);
+
   if(res_end > BUFFER_SIZE){
     printk(KERN_INFO "Buffer out of bounds!");
     res_end = 0;
   }
 
+  int i = 0;
+  printk("buffer:\n"); 
+  for(i; i < res_end + 1; i++){
+    printk("\'%c\'", res_buffer[i]);
+  }
+  printk("res_buffer[res_end]=%c\n", res_buffer[res_end]);
   return len;
 }
 
