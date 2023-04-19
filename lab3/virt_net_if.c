@@ -3,6 +3,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/moduleparam.h>
+#include <linux/proc_fs.h> 
 #include <linux/in.h>
 #include <net/arp.h>
 #include <linux/ip.h>
@@ -20,6 +21,74 @@ struct priv {
     struct net_device *parent;
 };
 
+struct ip_addreses_pair {
+    unsigned int saddr;
+    unsigned int daddr;
+};
+
+#define BUFFER_SIZE 40
+static struct ip_addreses_pair res_buffer[BUFFER_SIZE];
+static size_t res_end = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0) 
+  #define HAVE_PROC_OPS 
+#endif 
+
+static struct proc_dir_entry* our_proc_file;
+#define PROCFS_NAME "var2"
+
+size_t strlen(const char* str) {
+  size_t i = 0;
+  while (str[i] != '\0') i++;
+  return i;
+}
+
+static size_t i = 0;
+
+static ssize_t procfile_read(struct file *filePointer, char __user *buffer, 
+                             size_t buffer_length, loff_t *offset) 
+{ 
+    pr_info("Procfile read\n");
+    char mid_buffer[100];
+    struct ip_addreses_pair* ip = &res_buffer[i];
+    sprintf(mid_buffer, "Captured IP packet, saddr: %d.%d.%d.%d\ndaddr: %d.%d.%d.%d\n\0", 
+        ntohl(ip->saddr) >> 24, (ntohl(ip->saddr) >> 16) & 0x00FF,
+        (ntohl(ip->saddr) >> 8) & 0x0000FF, (ntohl(ip->saddr)) & 0x000000FF,
+        ntohl(ip->daddr) >> 24, (ntohl(ip->daddr) >> 16) & 0x00FF,
+        (ntohl(ip->daddr) >> 8) & 0x0000FF, (ntohl(ip->daddr)) & 0x000000FF
+    );
+    size_t mid_buf_len = strlen(mid_buffer);
+    if (copy_to_user(buffer, mid_buffer, mid_buf_len)) {
+        return 0;
+    } else {
+        *offset += mid_buf_len;
+    }
+    i = i + 1;
+    if (res_end - i == 0) {
+        i = 0;
+        return 0;
+    }
+    pr_info("write to proc file %d pair from %d pairs", i, res_end);
+    return mid_buf_len;
+}
+
+#ifdef HAVE_PROC_OPS 
+static const struct proc_ops proc_file_fops = { 
+    .proc_read = procfile_read, 
+}; 
+#else 
+static const struct file_operations proc_file_fops = { 
+    .read = procfile_read, 
+}; 
+#endif 
+
+void copy_str(char* buffer, char* str, size_t offset, int size){
+  size_t i;
+  for(i = 0; i < size; i++){
+    buffer[i + offset] = str[i];
+  }
+}
+
 static char check_frame(struct sk_buff *skb, unsigned char data_shift) {
     if (skb->protocol == htons(ETH_P_IP)){
         struct iphdr *ip = (struct iphdr *)skb_network_header(skb);
@@ -31,6 +100,12 @@ static char check_frame(struct sk_buff *skb, unsigned char data_shift) {
             printk("daddr: %d.%d.%d.%d\n",
                     ntohl(ip->daddr) >> 24, (ntohl(ip->daddr) >> 16) & 0x00FF,
                     (ntohl(ip->daddr) >> 8) & 0x0000FF, (ntohl(ip->daddr)) & 0x000000FF);
+            if (res_end == BUFFER_SIZE - 1) {
+                res_end = 0;
+            }
+            res_buffer[res_end].saddr = ip->saddr;
+            res_buffer[res_end].daddr = ip->daddr;
+            res_end += 1;
             return 1;
         }
     }
@@ -133,9 +208,19 @@ int __init vni_init(void) {
     rtnl_lock();
     netdev_rx_handler_register(priv->parent, &handle_frame, NULL);
     rtnl_unlock();
+
+    // procfs init
+    our_proc_file = proc_create(PROCFS_NAME, 0644, NULL, &proc_file_fops); 
+    if (NULL == our_proc_file) { 
+        proc_remove(our_proc_file); 
+        pr_alert("Error:Could not initialize /proc/%s\n", PROCFS_NAME); 
+        return -ENOMEM; 
+    } 
+ 
     printk(KERN_INFO "Module %s loaded", THIS_MODULE->name);
     printk(KERN_INFO "%s: create link %s", THIS_MODULE->name, child->name);
     printk(KERN_INFO "%s: registered rx handler for %s", THIS_MODULE->name, priv->parent->name);
+    pr_info("/proc/%s created\n", PROCFS_NAME); 
     return 0; 
 }
 
@@ -149,6 +234,10 @@ void __exit vni_exit(void) {
     }
     unregister_netdev(child);
     free_netdev(child);
+
+    //procfs destory
+    proc_remove(our_proc_file); 
+
     printk(KERN_INFO "Module %s unloaded", THIS_MODULE->name); 
 } 
 
