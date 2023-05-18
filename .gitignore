@@ -44,5 +44,3 @@ lab3/virt_net_if.o
 lab3/Module.symvers
 lab3/modules.order
 lab3/virt_net_if.ko
-lab3/p
-lab3/part.o
