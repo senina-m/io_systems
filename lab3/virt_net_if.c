@@ -11,7 +11,7 @@
 static char* link = "enp0s3";
 module_param(link, charp, 0);
 
-static char* ifname = "vni%d";
+static char* ifname = "lab3";
 
 static struct net_device_stats stats;
 
@@ -25,12 +25,13 @@ static char check_frame(struct sk_buff *skb, unsigned char data_shift) {
         struct iphdr *ip = (struct iphdr *)skb_network_header(skb);
         if(ip->version == 4){
 
-            printk("Captured UDP datagram, saddr: %d.%d.%d.%d\n",
+            printk("Captured IP packet, saddr: %d.%d.%d.%d\n",
                     ntohl(ip->saddr) >> 24, (ntohl(ip->saddr) >> 16) & 0x00FF,
                     (ntohl(ip->saddr) >> 8) & 0x0000FF, (ntohl(ip->saddr)) & 0x000000FF);
             printk("daddr: %d.%d.%d.%d\n",
                     ntohl(ip->daddr) >> 24, (ntohl(ip->daddr) >> 16) & 0x00FF,
                     (ntohl(ip->daddr) >> 8) & 0x0000FF, (ntohl(ip->daddr)) & 0x000000FF);
+            return 1;
         }
     }
     return 0;
@@ -121,6 +122,7 @@ int __init vni_init(void) {
     //copy IP, MAC and other information
     memcpy(child->dev_addr, priv->parent->dev_addr, ETH_ALEN);
     memcpy(child->broadcast, priv->parent->broadcast, ETH_ALEN);
+    
     if ((err = dev_alloc_name(child, child->name))) {
         printk(KERN_ERR "%s: allocate name, error %i", THIS_MODULE->name, err);
         free_netdev(child);
